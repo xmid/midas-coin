@@ -302,10 +302,9 @@ namespace nodetool
 
   private:
     const std::vector<std::string> m_seed_nodes_list =
-    { "seeds.moneroseeds.se"
-    , "seeds.moneroseeds.ae.org"
-    , "seeds.moneroseeds.ch"
-    , "seeds.moneroseeds.li"
+    {
+      // DNS A → full-node IPv4; P2P on P2P_DEFAULT_PORT (mainnet 19080).
+      "seeds.midascoin.info",
     };
 
     bool islimitup=false;

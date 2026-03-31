@@ -41,6 +41,11 @@ using namespace epee;
 #include "crypto/hash.h"
 #include "int-util.h"
 #include "common/dns_utils.h"
+extern "C"
+{
+#include "crypto/keccak.h"
+#include "crypto/crypto-ops.h"
+}
 
 #undef MONERO_DEFAULT_LOG_CATEGORY
 #define MONERO_DEFAULT_LOG_CATEGORY "cn"
@@ -170,6 +175,76 @@ namespace cryptonote {
       adr, payment_id
     };
     return tools::base58::encode_addr(integrated_address_prefix, t_serializable_object_to_blob(iadr));
+  }
+  //-----------------------------------------------------------------------
+  account_public_address get_burn_address()
+  {
+    // Genesis Burn Address - address whose spend private key never existed
+    // Generated deterministically from hash of "MIDAS_BURN_ADDRESS_V1_GENESIS"
+    // Using Keccak256 → point on Curve25519
+    
+    account_public_address burn_addr;
+    
+    // Step 1: Compute Keccak256 hash of seed string
+    const char* seed = config::BURN_ADDRESS_SEED;
+    crypto::hash seed_hash = crypto::cn_fast_hash(seed, strlen(seed));
+    
+    // Step 2: Convert hash to public key (spend_public_key) on Curve25519
+    // Use ge_fromfe_frombytes_vartime to convert hash to point on curve
+    // This ensures spend_private_key never existed (discrete logarithm problem)
+    ge_p2 point_p2;
+    ge_fromfe_frombytes_vartime(&point_p2, reinterpret_cast<const unsigned char*>(&seed_hash));
+    
+    // Convert ge_p2 to public key (32 bytes)
+    ge_tobytes(reinterpret_cast<unsigned char*>(burn_addr.m_spend_public_key.data), &point_p2);
+    
+    // Step 3: Create view_private_key and view_public_key using standard Ed25519
+    // view_private_key = hash_to_scalar(seed_hash) (deterministic, public, valid scalar)
+    // view_public_key = view_private_key * G (standard Ed25519 operation)
+    // This allows anyone to scan incoming transactions to burn address
+    // while still being unable to spend (spend_private_key doesn't exist)
+    crypto::secret_key view_private_key;
+    crypto::hash_to_scalar(&seed_hash, sizeof(crypto::hash), view_private_key);
+    
+    // Generate view_public_key from view_private_key using standard Ed25519
+    bool r = crypto::secret_key_to_public_key(view_private_key, burn_addr.m_view_public_key);
+    if (!r)
+    {
+      // This should never happen if hash_to_scalar worked correctly
+      // But keep fallback for safety
+      crypto::hash view_hash = crypto::cn_fast_hash(burn_addr.m_spend_public_key.data, sizeof(crypto::public_key));
+      ge_p2 view_point_p2;
+      ge_fromfe_frombytes_vartime(&view_point_p2, reinterpret_cast<const unsigned char*>(&view_hash));
+      ge_tobytes(reinterpret_cast<unsigned char*>(burn_addr.m_view_public_key.data), &view_point_p2);
+    }
+    
+    return burn_addr;
+  }
+  //-----------------------------------------------------------------------
+  std::string get_burn_address_str(network_type nettype)
+  {
+    account_public_address burn_addr = get_burn_address();
+    return get_account_address_as_str(nettype, false, burn_addr);
+  }
+  //-----------------------------------------------------------------------
+  crypto::public_key get_burn_address_view_public_key()
+  {
+    account_public_address burn_addr = get_burn_address();
+    return burn_addr.m_view_public_key;
+  }
+  //-----------------------------------------------------------------------
+  crypto::secret_key get_burn_address_view_private_key()
+  {
+    // Return deterministic view_private_key derived from seed
+    // This key is PUBLIC - published so anyone can scan transactions
+    // Uses hash_to_scalar to ensure valid scalar value
+    const char* seed = config::BURN_ADDRESS_SEED;
+    crypto::hash seed_hash = crypto::cn_fast_hash(seed, strlen(seed));
+    
+    crypto::secret_key view_private_key;
+    crypto::hash_to_scalar(&seed_hash, sizeof(crypto::hash), view_private_key);
+    
+    return view_private_key;
   }
   //-----------------------------------------------------------------------
   bool is_coinbase(const transaction_prefix& tx)

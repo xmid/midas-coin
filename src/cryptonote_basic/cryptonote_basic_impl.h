@@ -95,6 +95,22 @@ namespace cryptonote {
     , const crypto::hash8& payment_id
     );
 
+  // Generates Genesis Burn Address - address whose private key never existed
+  // Address is created deterministically from hash of BURN_ADDRESS_SEED
+  account_public_address get_burn_address();
+  
+  // Returns burn address as string for specified network type
+  std::string get_burn_address_str(network_type nettype);
+  
+  // Returns burn address view public key (for dashboard monitoring)
+  // This is the audit key that allows viewing transactions to burn address
+  crypto::public_key get_burn_address_view_public_key();
+  
+  // Returns burn address view private key (PUBLIC - for scanning transactions)
+  // This key is published so anyone can scan incoming transactions to burn address
+  // It cannot be used to spend funds (spend_private_key doesn't exist)
+  crypto::secret_key get_burn_address_view_private_key();
+
   bool get_account_address_from_str(
       address_parse_info& info
     , network_type nettype

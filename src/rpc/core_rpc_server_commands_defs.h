@@ -2791,4 +2791,42 @@ inline const std::string get_rpc_status(const bool trusted_daemon, const std::st
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+  struct COMMAND_RPC_GET_BURN
+  {
+    struct request_t: public rpc_request_base
+    {
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(rpc_request_base)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<request_t> request;
+
+    struct response_t: public rpc_response_base
+    {
+      uint64_t balance;
+      std::string wide_balance;
+      uint64_t unlocked_balance;
+      std::string wide_unlocked_balance;
+      uint64_t total_outputs;
+      std::string address;
+      std::string spend_public_key;
+      std::string view_public_key;
+      std::string view_private_key;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE_PARENT(rpc_response_base)
+        KV_SERIALIZE(balance)
+        KV_SERIALIZE(wide_balance)
+        KV_SERIALIZE(unlocked_balance)
+        KV_SERIALIZE(wide_unlocked_balance)
+        KV_SERIALIZE(total_outputs)
+        KV_SERIALIZE(address)
+        KV_SERIALIZE(spend_public_key)
+        KV_SERIALIZE(view_public_key)
+        KV_SERIALIZE(view_private_key)
+      END_KV_SERIALIZE_MAP()
+    };
+    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
 }

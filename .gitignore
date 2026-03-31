@@ -118,3 +118,10 @@ nbproject
 __pycache__/
 *.pyc
 *.log
+
+# Docker build outputs
+/binaries
+/output
+
+# Local documentation
+/docs/local

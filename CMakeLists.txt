@@ -1,4 +1,4 @@
-# Copyright (c) 2014-2024, The Monero Project
+# Copyright (c) 2014-2024, The Midas Project
 #
 # All rights reserved.
 #
@@ -51,7 +51,7 @@ if (IOS)
     INCLUDE(CmakeLists_IOS.txt)
 endif()
 
-project(monero)
+project(midas)
 
 option (USE_CCACHE "Use ccache if a usable instance is found" ON)
 if (USE_CCACHE)
@@ -249,7 +249,13 @@ add_library(l3 OBJECT incorrect_source.cpp)
     file(REMOVE_RECURSE "${TEST_PROJECT}")
   endforeach()
 endfunction()
-if (NOT (CMAKE_SYSTEM_NAME MATCHES "kOpenBSD.*|OpenBSD.*") AND NOT OSSFUZZ)
+
+# Detect MinGW for cross-compilation
+if(NOT MINGW AND CMAKE_SYSTEM_NAME MATCHES "Windows" AND (CMAKE_C_COMPILER MATCHES "mingw" OR CMAKE_CXX_COMPILER MATCHES "mingw"))
+  set(MINGW TRUE)
+endif()
+
+if (NOT (CMAKE_SYSTEM_NAME MATCHES "kOpenBSD.*|OpenBSD.*") AND NOT OSSFUZZ AND NOT MINGW AND NOT (CMAKE_SYSTEM_NAME MATCHES "Windows" AND CMAKE_CROSSCOMPILING))
   forbid_undefined_symbols()
 endif()
 
@@ -491,7 +497,7 @@ if(SANITIZE)
 endif()
 
 # Set default blockchain storage location:
-# memory was the default in Cryptonote before Monero implemented LMDB, it still works but is unnecessary.
+# memory was the default in Cryptonote before Midas implemented LMDB, it still works but is unnecessary.
 # set(DATABASE memory)
 set(DATABASE lmdb)
 message(STATUS "Using LMDB as default DB type")
@@ -959,7 +965,7 @@ include(CheckTrezor)
 
   set(DEBUG_FLAGS "-g3")
 
-  # At least some CLANGs default to not enough for monero
+  # At least some CLANGs default to not enough for midas
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
 
   if(NOT DEFINED USE_LTO_DEFAULT)
@@ -1075,6 +1081,9 @@ if(MINGW)
     find_library(ICONV_LIBRARIES NAMES iconv REQUIRED)
     set(ICU_LIBRARIES ${ICUIO_LIBRARIES} ${ICUIN_LIBRARIES} ${ICUUC_LIBRARIES} ${ICUDT_LIBRARIES} ${ICUTU_LIBRARIES} ${ICONV_LIBRARIES})
     set(CMAKE_FIND_LIBRARY_SUFFIXES ${OLD_LIB_SUFFIXES})
+  else()
+    # boost_locale requires libiconv for linking when using depends
+    list(APPEND EXTRA_LIBRARIES iconv)
   endif()
 elseif(APPLE OR OPENBSD OR ANDROID)
   set(EXTRA_LIBRARIES "")

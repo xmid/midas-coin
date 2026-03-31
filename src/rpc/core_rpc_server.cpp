@@ -46,6 +46,7 @@ using namespace epee;
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/merge_mining.h"
+#include "cryptonote_config.h"
 #include "cryptonote_core/tx_sanity_check.h"
 #include "misc_language.h"
 #include "net/local_ip.h"
@@ -477,6 +478,13 @@ namespace cryptonote
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::check_core_ready()
   {
+    // Allow mining if no peers are connected (solo mining scenario)
+    uint64_t total_conn = m_p2p.get_public_connections_count();
+    if (total_conn == 0)
+    {
+      return true;
+    }
+    
     if(!m_p2p.get_payload_object().is_synchronized())
     {
       return false;
@@ -978,6 +986,113 @@ namespace cryptonote
     }
 
     res.status = CORE_RPC_STATUS_OK;
+    return true;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool core_rpc_server::on_get_burn(const COMMAND_RPC_GET_BURN::request& req, COMMAND_RPC_GET_BURN::response& res, const connection_context *ctx)
+  {
+    RPC_TRACKER(get_burn);
+    
+    res.balance = 0;
+    res.unlocked_balance = 0;
+    res.total_outputs = 0;
+    res.wide_balance = "0";
+    res.wide_unlocked_balance = "0";
+    res.status = CORE_RPC_STATUS_OK;
+
+    // Get burn address
+    account_public_address burn_addr = get_burn_address();
+    crypto::secret_key view_private_key = get_burn_address_view_private_key();
+    crypto::public_key view_public_key = get_burn_address_view_public_key();
+    
+    // Fill address and keys
+    res.address = get_burn_address_str(nettype());
+    res.spend_public_key = epee::string_tools::pod_to_hex(burn_addr.m_spend_public_key);
+    res.view_public_key = epee::string_tools::pod_to_hex(view_public_key);
+    res.view_private_key = epee::string_tools::pod_to_hex(unwrap(unwrap(view_private_key)));
+    
+    // Get current blockchain height
+    uint64_t current_height = m_core.get_current_blockchain_height();
+    
+    // Scan all blocks to find outputs belonging to burn address
+    for (uint64_t height = 0; height < current_height; ++height)
+    {
+      block blk;
+      try
+      {
+        blk = m_core.get_blockchain_storage().get_db().get_block_from_height(height);
+      }
+      catch (...)
+      {
+        continue;
+      }
+      
+      // Check miner transaction
+      std::vector<transaction> txs;
+      txs.push_back(blk.miner_tx);
+      
+      // Get all transactions in block
+      std::vector<crypto::hash> missed_txs;
+      if (!blk.tx_hashes.empty())
+      {
+        m_core.get_transactions(blk.tx_hashes, txs, missed_txs);
+      }
+      
+      // Scan outputs in all transactions
+      for (const transaction& tx : txs)
+      {
+        crypto::public_key tx_pub_key = get_tx_pub_key_from_extra(tx);
+        if (tx_pub_key == crypto::null_pkey)
+          continue;
+        
+        // Generate key derivation using view private key
+        crypto::key_derivation derivation;
+        if (!crypto::generate_key_derivation(tx_pub_key, view_private_key, derivation))
+          continue;
+        
+        // Check each output
+        for (size_t i = 0; i < tx.vout.size(); ++i)
+        {
+          const tx_out& out = tx.vout[i];
+          
+          // Get output public key
+          crypto::public_key output_public_key;
+          if (!get_output_public_key(out, output_public_key))
+            continue;
+          
+          // Derive expected public key for burn address
+          crypto::public_key derived_public_key;
+          if (!crypto::derive_public_key(derivation, i, burn_addr.m_spend_public_key, derived_public_key))
+            continue;
+          
+          // Check if output belongs to burn address
+          if (output_public_key == derived_public_key)
+          {
+            res.balance += out.amount;
+            res.total_outputs++;
+            
+            // Check if output is unlocked
+            uint64_t unlock_time = tx.unlock_time;
+            if (unlock_time < CRYPTONOTE_MAX_BLOCK_NUMBER)
+            {
+              if (height + CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE <= current_height)
+                res.unlocked_balance += out.amount;
+            }
+            else
+            {
+              uint64_t current_time = static_cast<uint64_t>(time(NULL));
+              if (unlock_time <= current_time)
+                res.unlocked_balance += out.amount;
+            }
+          }
+        }
+      }
+    }
+    
+    // Convert to wide string format
+    res.wide_balance = std::to_string(res.balance);
+    res.wide_unlocked_balance = std::to_string(res.unlocked_balance);
+    
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3215,7 +3330,7 @@ namespace cryptonote
       return true;
     }
 
-    static const char software[] = "monero";
+    static const char software[] = "midas";
 #ifdef BUILD_TAG
     static const char buildtag[] = BOOST_PP_STRINGIZE(BUILD_TAG);
     static const char subdir[] = "cli";

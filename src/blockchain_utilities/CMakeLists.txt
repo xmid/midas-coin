@@ -157,7 +157,7 @@ endif()
 
 set_property(TARGET blockchain_import
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-import")
+	OUTPUT_NAME "midas-blockchain-import")
 install(TARGETS blockchain_import DESTINATION bin)
 
 monero_add_executable(blockchain_export
@@ -178,7 +178,7 @@ target_link_libraries(blockchain_export
 
 set_property(TARGET blockchain_export
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-export")
+	OUTPUT_NAME "midas-blockchain-export")
 install(TARGETS blockchain_export DESTINATION bin)
 
 monero_add_executable(blockchain_blackball
@@ -200,7 +200,7 @@ target_link_libraries(blockchain_blackball
 
 set_property(TARGET blockchain_blackball
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-mark-spent-outputs")
+	OUTPUT_NAME "midas-blockchain-mark-spent-outputs")
 install(TARGETS blockchain_blackball DESTINATION bin)
 
 
@@ -222,7 +222,7 @@ target_link_libraries(blockchain_usage
 
 set_property(TARGET blockchain_usage
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-usage")
+	OUTPUT_NAME "midas-blockchain-usage")
 install(TARGETS blockchain_usage DESTINATION bin)
 
 monero_add_executable(blockchain_ancestry
@@ -243,7 +243,7 @@ target_link_libraries(blockchain_ancestry
 
 set_property(TARGET blockchain_ancestry
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-ancestry")
+	OUTPUT_NAME "midas-blockchain-ancestry")
 install(TARGETS blockchain_ancestry DESTINATION bin)
 
 monero_add_executable(blockchain_depth
@@ -264,7 +264,7 @@ target_link_libraries(blockchain_depth
 
 set_property(TARGET blockchain_depth
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-depth")
+	OUTPUT_NAME "midas-blockchain-depth")
 install(TARGETS blockchain_depth DESTINATION bin)
 
 monero_add_executable(blockchain_stats
@@ -285,7 +285,7 @@ target_link_libraries(blockchain_stats
 
 set_property(TARGET blockchain_stats
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-stats")
+	OUTPUT_NAME "midas-blockchain-stats")
 install(TARGETS blockchain_stats DESTINATION bin)
 
 monero_add_executable(blockchain_prune_known_spent_data
@@ -307,7 +307,7 @@ target_link_libraries(blockchain_prune_known_spent_data
 
 set_property(TARGET blockchain_prune_known_spent_data
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-prune-known-spent-data")
+	OUTPUT_NAME "midas-blockchain-prune-known-spent-data")
 install(TARGETS blockchain_prune_known_spent_data DESTINATION bin)
 
 monero_add_executable(blockchain_prune
@@ -316,7 +316,7 @@ monero_add_executable(blockchain_prune
 
 set_property(TARGET blockchain_prune
 	PROPERTY
-	OUTPUT_NAME "monero-blockchain-prune")
+	OUTPUT_NAME "midas-blockchain-prune")
 install(TARGETS blockchain_prune DESTINATION bin)
 
 target_link_libraries(blockchain_prune
@@ -331,3 +331,71 @@ target_link_libraries(blockchain_prune
     ${Boost_THREAD_LIBRARY}
     ${CMAKE_THREAD_LIBS_INIT}
     ${EXTRA_LIBRARIES})
+
+monero_add_executable(gen_new_genesis
+  gen_new_genesis.cpp)
+
+set_property(TARGET gen_new_genesis
+	PROPERTY
+	OUTPUT_NAME "midas-gen-new-genesis")
+
+target_link_libraries(gen_new_genesis
+  PRIVATE
+    cryptonote_core
+    version
+    epee
+    ${Boost_SYSTEM_LIBRARY}
+    ${EXTRA_LIBRARIES})
+
+install(TARGETS gen_new_genesis DESTINATION bin)
+
+monero_add_executable(gen_burn_address
+  gen_burn_address.cpp)
+
+set_property(TARGET gen_burn_address
+	PROPERTY
+	OUTPUT_NAME "midas-gen-burn-address")
+
+target_link_libraries(gen_burn_address
+  PRIVATE
+    cryptonote_core
+    version
+    epee
+    ${Boost_SYSTEM_LIBRARY}
+    ${EXTRA_LIBRARIES})
+
+install(TARGETS gen_burn_address DESTINATION bin)
+
+monero_add_executable(gen_genesis_with_burn
+  gen_genesis_with_burn.cpp)
+
+set_property(TARGET gen_genesis_with_burn
+	PROPERTY
+	OUTPUT_NAME "midas-gen-genesis-with-burn")
+
+target_link_libraries(gen_genesis_with_burn
+  PRIVATE
+    cryptonote_core
+    version
+    epee
+    ${Boost_SYSTEM_LIBRARY}
+    ${EXTRA_LIBRARIES})
+
+install(TARGETS gen_genesis_with_burn DESTINATION bin)
+
+monero_add_executable(verify_burn_address
+  verify_burn_address.cpp)
+
+set_property(TARGET verify_burn_address
+	PROPERTY
+	OUTPUT_NAME "midas-verify-burn-address")
+
+target_link_libraries(verify_burn_address
+  PRIVATE
+    cryptonote_core
+    version
+    epee
+    ${Boost_SYSTEM_LIBRARY}
+    ${EXTRA_LIBRARIES})
+
+install(TARGETS verify_burn_address DESTINATION bin)

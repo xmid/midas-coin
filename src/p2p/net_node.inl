@@ -728,33 +728,22 @@ namespace nodetool
   std::set<std::string> node_server<t_payload_net_handler>::get_ip_seed_nodes() const
   {
     std::set<std::string> full_addrs;
+    // Midas: No seed nodes by default - users should add their own nodes
+    // For independent fork, seed nodes should be configured separately
     if (m_nettype == cryptonote::TESTNET)
     {
-      full_addrs.insert("176.9.0.187:28080");
-      full_addrs.insert("192.99.8.110:28080");
-      full_addrs.insert("37.187.74.171:28080");
-      full_addrs.insert("88.99.195.15:28080");
-      full_addrs.insert("5.104.84.64:28080");
+      // Add your testnet seed nodes here if needed
     }
     else if (m_nettype == cryptonote::STAGENET)
     {
-      full_addrs.insert("176.9.0.187:38080");
-      full_addrs.insert("192.99.8.110:38080");
-      full_addrs.insert("37.187.74.171:38080");
-      full_addrs.insert("88.99.195.15:38080");
-      full_addrs.insert("5.104.84.64:38080");
+      // Add your stagenet seed nodes here if needed
     }
     else if (m_nettype == cryptonote::FAKECHAIN)
     {
     }
     else
     {
-      full_addrs.insert("176.9.0.187:18080");
-      full_addrs.insert("88.198.163.90:18080");
-      full_addrs.insert("192.99.8.110:18080");
-      full_addrs.insert("37.187.74.171:18080");
-      full_addrs.insert("88.99.195.15:18080");
-      full_addrs.insert("5.104.84.64:18080");
+      // Mainnet: use DNS seeds (m_seed_nodes_list); add IP fallbacks here only if needed
     }
     return full_addrs;
   }
@@ -777,7 +766,18 @@ namespace nodetool
     if (!m_enable_dns_seed_nodes)
     {
       // TODO: a domain can be set through socks, so that the remote side does the lookup for the DNS seed nodes.
-      m_fallback_seed_nodes_added.test_and_set();
+      // Don't set m_fallback_seed_nodes_added here - this is the primary way to get seed nodes,
+      // not a fallback. The fallback flag should only be set in connect_to_seed() when
+      // initial seed nodes fail and we need to add more.
+      return get_ip_seed_nodes();
+    }
+
+    // If no DNS seed nodes are configured, immediately fall back to IP seed nodes
+    if (m_seed_nodes_list.empty())
+    {
+      // Don't set m_fallback_seed_nodes_added here - this is the primary way to get seed nodes,
+      // not a fallback. The fallback flag should only be set in connect_to_seed() when
+      // initial seed nodes fail and we need to add more.
       return get_ip_seed_nodes();
     }
 

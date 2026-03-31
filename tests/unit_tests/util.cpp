@@ -31,7 +31,7 @@
 #include "common/util.h"
 
 TEST(LocalAddress, localhost) { ASSERT_TRUE(tools::is_local_address("localhost")); }
-TEST(LocalAddress, localhost_port) { ASSERT_TRUE(tools::is_local_address("localhost:18081")); }
+TEST(LocalAddress, localhost_port) { ASSERT_TRUE(tools::is_local_address("localhost:19081")); }
 TEST(LocalAddress, localhost_suffix) { ASSERT_TRUE(tools::is_local_address("test.localhost")); }
 TEST(LocalAddress, loopback) { ASSERT_TRUE(tools::is_local_address("127.0.0.1")); }
 TEST(LocalAddress, loopback_port) { ASSERT_TRUE(tools::is_local_address("127.0.0.1:18081")); }

@@ -51,6 +51,7 @@
 #include "common/threadpool.h"
 #include "warnings.h"
 #include "crypto/hash.h"
+#include "crypto/crypto.h"
 #include "cryptonote_core.h"
 #include "ringct/rctSigs.h"
 #include "common/perf_timer.h"
@@ -335,6 +336,16 @@ bool Blockchain::init(BlockchainDB* db, const network_type nettype, bool offline
   m_hardfork->init();
 
   m_db->set_hard_fork(m_hardfork);
+
+  // Verify Genesis Burn Address - protocol constant known to all nodes
+  // This ensures burn address is properly generated and available from startup
+  {
+    account_public_address burn_addr = get_burn_address();
+    // Verify burn address public keys are valid points on the curve
+    CHECK_AND_ASSERT_MES(crypto::check_key(burn_addr.m_spend_public_key), false, "Invalid burn address: spend public key is not a valid curve point");
+    CHECK_AND_ASSERT_MES(crypto::check_key(burn_addr.m_view_public_key), false, "Invalid burn address: view public key is not a valid curve point");
+    MINFO("Genesis Burn Address verified: " << get_burn_address_str(m_nettype));
+  }
 
   // if the blockchain is new, add the genesis block
   // this feels kinda kludgy to do it this way, but can be looked at later.
@@ -5435,7 +5446,7 @@ void Blockchain::cancel()
 }
 
 #if defined(PER_BLOCK_CHECKPOINT)
-static const char expected_block_hashes_hash[] = "06c61040ace2d58086f1f8f0c0a78881a71c88f2814307b19f881ef92680f6e0";
+static const char expected_block_hashes_hash[] = "169cf87792db400e9be77be63de1a06a08b84e1d0ee570f43f5d9d2b8270eff2";
 void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get_checkpoints)
 {
   if (get_checkpoints == nullptr || !m_fast_sync)

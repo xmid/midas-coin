@@ -112,9 +112,9 @@ using namespace cryptonote;
 // used to target a given block weight (additional outputs may be added on top to build fee)
 #define TX_WEIGHT_TARGET(bytes) (bytes*2/3)
 
-#define UNSIGNED_TX_PREFIX "Monero unsigned tx set\005"
-#define SIGNED_TX_PREFIX "Monero signed tx set\005"
-#define MULTISIG_UNSIGNED_TX_PREFIX "Monero multisig unsigned tx set\001"
+#define UNSIGNED_TX_PREFIX "Midas unsigned tx set\005"
+#define SIGNED_TX_PREFIX "Midas signed tx set\005"
+#define MULTISIG_UNSIGNED_TX_PREFIX "Midas multisig unsigned tx set\001"
 
 #define RECENT_OUTPUT_RATIO (0.5) // 50% of outputs are from the recent zone
 #define RECENT_OUTPUT_DAYS (1.8) // last 1.8 day makes up the recent zone (taken from monerolink.pdf, Miller et al)
@@ -249,7 +249,7 @@ struct options {
   const command_line::arg_descriptor<bool> untrusted_daemon = {"untrusted-daemon", tools::wallet2::tr("Disable commands which rely on a trusted daemon"), false};
   const command_line::arg_descriptor<std::string> password = {"password", tools::wallet2::tr("Wallet password (escape/quote as needed)"), "", true};
   const command_line::arg_descriptor<std::string> password_file = wallet_args::arg_password_file();
-  const command_line::arg_descriptor<int> daemon_port = {"daemon-port", tools::wallet2::tr("Use daemon instance at port <arg> instead of 18081"), 0};
+  const command_line::arg_descriptor<int> daemon_port = {"daemon-port", tools::wallet2::tr("Use daemon instance at port <arg> instead of 19081"), 0};
   const command_line::arg_descriptor<std::string> daemon_login = {"daemon-login", tools::wallet2::tr("Specify username[:password] for daemon RPC client"), "", true};
   const command_line::arg_descriptor<std::string> daemon_ssl = {"daemon-ssl", tools::wallet2::tr("Enable SSL on daemon RPC connections: enabled|disabled|autodetect"), "autodetect"};
   const command_line::arg_descriptor<std::string> daemon_ssl_private_key = {"daemon-ssl-private-key", tools::wallet2::tr("Path to a PEM format private key"), ""};
@@ -2996,6 +2996,9 @@ void wallet2::process_outgoing(const crypto::hash &txid, const cryptonote::trans
 //----------------------------------------------------------------------------------------------------
 bool wallet2::should_skip_block(const cryptonote::block &b, uint64_t height) const
 {
+  // Never skip genesis block (height 0) - it may contain rewards for custom blockchains
+  if (height == 0)
+    return false;
   // seeking only for blocks that are not older then the wallet creation time plus 1 day. 1 day is for possible user incorrect time setup
   return !(b.timestamp + 60*60*24 > m_account.get_createtime() && height >= m_refresh_from_block_height && height >= m_skip_to_height);
 }
@@ -3431,6 +3434,14 @@ void wallet2::process_parsed_blocks(const uint64_t start_height, const std::vect
     else
     {
       LOG_PRINT_L2("Block is already in blockchain: " << string_tools::pod_to_hex(bl_id));
+      // Always process genesis block transaction even if block is already in blockchain,
+      // as it may not have been processed yet (e.g., for custom blockchains)
+      if (current_index == 0 && !should_skip_block(bl, current_index))
+      {
+        if (m_refresh_type != RefreshNoCoinbase)
+          process_new_transaction(get_transaction_hash(bl.miner_tx), bl.miner_tx, parsed_blocks[i].o_indices.indices[0].indices, current_index, bl.major_version, bl.timestamp, true, false, false, tx_cache_data[tx_cache_data_offset], output_tracker_cache);
+        m_last_block_reward = cryptonote::get_outs_money_amount(bl.miner_tx);
+      }
     }
     ++current_index;
     tx_cache_data_offset += 1 + parsed_blocks[i].txes.size();
@@ -4104,7 +4115,10 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   m_run.store(true, std::memory_order_relaxed);
   if (start_height > m_blockchain.size() || m_refresh_from_block_height > m_blockchain.size() || m_skip_to_height > m_blockchain.size()) {
     if (!start_height)
-      start_height = std::max(m_refresh_from_block_height, m_skip_to_height);;
+      start_height = std::max(m_refresh_from_block_height, m_skip_to_height);
+    // Always include genesis block (height 0) if blockchain only has genesis, to process its transaction
+    if (m_blockchain.size() == 1 && start_height > 0)
+      start_height = 0;
     // we can shortcut by only pulling hashes up to the start_height
     fast_refresh(start_height, blocks_start_height, short_chain_history);
     // regenerate the history now that we've got a full set of hashes
@@ -4120,6 +4134,64 @@ void wallet2::refresh(bool trusted_daemon, uint64_t start_height, uint64_t & blo
   // always reset start_height to 0 to force short_chain_ history to be used on
   // subsequent pulls in this refresh.
   start_height = 0;
+
+  // Check if genesis block transaction needs to be processed
+  // This is important for custom blockchains where genesis block contains rewards
+  bool genesis_needs_processing = false;
+  if (m_blockchain.size() == 1)
+  {
+    // Check if we have any transfers from genesis block (height 0)
+    genesis_needs_processing = std::none_of(m_transfers.begin(), m_transfers.end(),
+      [](const transfer_details &td) { return td.m_block_height == 0; });
+    
+    if (genesis_needs_processing)
+    {
+      // Use getblocks_by_height to explicitly request genesis block (height 0)
+      // This bypasses the short_chain_history mechanism that prevents getting genesis block
+      try
+      {
+        COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::request req;
+        COMMAND_RPC_GET_BLOCKS_BY_HEIGHT::response res;
+        req.heights.push_back(0);
+        
+        {
+          const boost::lock_guard<boost::recursive_mutex> lock{m_daemon_rpc_mutex};
+          bool r = net_utils::invoke_http_bin("/getblocks_by_height.bin", req, res, *m_http_client, rpc_timeout);
+          
+          if (r && res.status == CORE_RPC_STATUS_OK && res.blocks.size() == 1)
+          {
+            cryptonote::block genesis_block;
+            if (cryptonote::parse_and_validate_block_from_blob(res.blocks[0].block, genesis_block))
+            {
+              crypto::hash genesis_hash = get_block_hash(genesis_block);
+              
+              if (genesis_hash == m_blockchain[0])
+              {
+                // Process genesis block miner transaction directly
+                // For coinbase transactions, we don't need output_indices, but process_new_transaction requires matching size
+                if (!should_skip_block(genesis_block, 0) && m_refresh_type != RefreshNoCoinbase)
+                {
+                  // Create output_indices vector with correct size (filled with 0, as they're not used for miner_tx)
+                  std::vector<uint64_t> o_indices(genesis_block.miner_tx.vout.size(), 0);
+                  uint64_t reward = cryptonote::get_outs_money_amount(genesis_block.miner_tx);
+                  
+                  process_new_transaction(get_transaction_hash(genesis_block.miner_tx), genesis_block.miner_tx, 
+                    o_indices, 0, genesis_block.major_version, genesis_block.timestamp, true, false, false, {}, nullptr);
+                  m_last_block_reward = reward;
+                  blocks_fetched++;
+                  MDEBUG("Successfully processed genesis block transaction, reward: " << print_money(m_last_block_reward));
+                }
+              }
+            }
+          }
+        }
+      }
+      catch (const std::exception &e)
+      {
+        MERROR("Failed to explicitly request genesis block: " << e.what());
+      }
+    }
+  }
 
   auto keys_reencryptor = epee::misc_utils::create_scope_leave_handler([&, this]() {
     m_encrypt_keys_after_refresh.reset();
@@ -6417,7 +6489,7 @@ bool wallet2::check_hard_fork_version(cryptonote::network_type nettype, const st
       uint64_t daemon_missed_fork_height = wallet_hard_forks[daemon_hard_forks.size()].height;
 
       // If the daemon missed the fork, then technically it is no longer part of
-      // the Monero network. Don't connect.
+      // the Midas network. Don't connect.
       bool daemon_missed_fork = height >= daemon_missed_fork_height || target_height >= daemon_missed_fork_height;
       if (daemon_missed_fork)
         return false;
@@ -12870,19 +12942,23 @@ uint64_t wallet2::get_daemon_blockchain_target_height(string &err)
 
 uint64_t wallet2::get_approximate_blockchain_height() const
 {
-  // time of v2 fork
-  const time_t fork_time = m_nettype == TESTNET ? 1448285909 : m_nettype == STAGENET ? 1520937818 : 1458748658;
-  // v2 fork block
-  const uint64_t fork_block = m_nettype == TESTNET ? 624634 : m_nettype == STAGENET ? 32000 : 1009827;
-  // avg seconds per block
+  // For Midas blockchain, calculate from genesis block creation time (time now)
+  // Midas is a new independent chain starting from block 0
+  // TODO: Replace time(NULL) with actual Midas blockchain launch timestamp when available
+  const time_t midas_genesis_time = time(NULL); // Midas genesis creation time (use current time for now)
+  const uint64_t genesis_block = 0; // Midas starts from block 0
   const int seconds_per_block = DIFFICULTY_TARGET_V2;
-  // Calculated blockchain height
-  uint64_t approx_blockchain_height = fork_block + (time(NULL) - fork_time)/seconds_per_block;
-  // testnet and stagenet got some huge rollbacks, so the estimation is way off
-  static const uint64_t approximate_rolled_back_blocks = m_nettype == TESTNET ? 342100 : m_nettype == STAGENET ? 60000 : 30000;
-  if ((m_nettype == TESTNET || m_nettype == STAGENET) && approx_blockchain_height > approximate_rolled_back_blocks)
-    approx_blockchain_height -= approximate_rolled_back_blocks;
-  LOG_PRINT_L2("Calculated blockchain height: " << approx_blockchain_height);
+  
+  // Calculate from Midas genesis time
+  // For a new chain, this will be close to 0 (genesis block)
+  const time_t current_time = time(NULL);
+  uint64_t approx_blockchain_height = genesis_block + (current_time - midas_genesis_time) / seconds_per_block;
+  
+  // Ensure we don't return negative values
+  if (current_time < midas_genesis_time)
+    approx_blockchain_height = 0;
+  
+  LOG_PRINT_L2("Calculated Midas blockchain height from genesis: " << approx_blockchain_height);
   return approx_blockchain_height;
 }
 
@@ -14851,7 +14927,7 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
     return std::string();
   }
 
-  std::string uri = "monero:" + address;
+  std::string uri = "midas:" + address;
   unsigned int n_fields = 0;
 
   if (!payment_id.empty())
@@ -14880,9 +14956,9 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
 //----------------------------------------------------------------------------------------------------
 bool wallet2::parse_uri(const std::string &uri, std::string &address, std::string &payment_id, uint64_t &amount, std::string &tx_description, std::string &recipient_name, std::vector<std::string> &unknown_parameters, std::string &error)
 {
-  if (uri.substr(0, 7) != "monero:")
+  if (uri.substr(0, 6) != "midas:")
   {
-    error = std::string("URI has wrong scheme (expected \"monero:\"): ") + uri;
+    error = std::string("URI has wrong scheme (expected \"midas:\"): ") + uri;
     return false;
   }
 
@@ -15109,8 +15185,8 @@ std::vector<std::pair<uint64_t, uint64_t>> wallet2::estimate_backlog(const std::
     uint64_t nblocks_max = minfee_weight / full_reward_zone;
     uint64_t nblocks_min = maxfee_weight / full_reward_zone;
     MDEBUG("estimate_backlog: given a block weight of " << full_reward_zone << " you will need to wait "
-      << nblocks_min << " when paying " << our_fee_byte_max << " piconero per byte and " << nblocks_max
-      << " when paying " << our_fee_byte_min << " piconeros per byte.");
+      << nblocks_min << " when paying " << our_fee_byte_max << " picomidas per byte and " << nblocks_max
+      << " when paying " << our_fee_byte_min << " picomidas per byte.");
     blocks.push_back(std::make_pair(nblocks_min, nblocks_max));
   }
   return blocks;
@@ -15165,7 +15241,7 @@ mms::multisig_wallet_state wallet2::get_multisig_wallet_state() const
   state.num_transfer_details = m_transfers.size();
   if (state.multisig)
   {
-    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Monero address not available");
+    THROW_WALLET_EXCEPTION_IF(!m_original_keys_available, error::wallet_internal_error, "MMS use not possible because own original Midas address not available");
     state.address = m_original_address;
     state.view_secret_key = m_original_view_secret_key;
   }

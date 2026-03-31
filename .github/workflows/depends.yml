@@ -24,6 +24,7 @@ env:
 
 jobs:
   build-cross:
+    if: false
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04

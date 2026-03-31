@@ -2421,7 +2421,13 @@ skip:
   {
     bool val_expected = false;
     uint64_t current_blockchain_height = m_core.get_current_blockchain_height();
-    if(!m_core.is_within_compiled_block_hash_area(current_blockchain_height) && m_synchronized.compare_exchange_strong(val_expected, true))
+    uint64_t target_height = m_core.get_target_blockchain_height();
+    if (target_height == 0)
+      target_height = current_blockchain_height;
+    // Modified condition: allow sync flag for heights >= 512 (is_within_compiled_block_hash_area returns true for 0-511)
+    // For short blockchains (< 512), allow sync if current height equals target height
+    bool should_set_sync = (current_blockchain_height >= 512) || (current_blockchain_height < 512 && current_blockchain_height == target_height);
+    if(should_set_sync && m_synchronized.compare_exchange_strong(val_expected, true))
     {
       if ((current_blockchain_height > m_sync_start_height) && (m_sync_spans_downloaded > 0))
       {
