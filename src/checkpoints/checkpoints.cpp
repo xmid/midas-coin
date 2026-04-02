@@ -210,11 +210,27 @@ namespace cryptonote
       ADD_CHECKPOINT2(550000,  "409f68cddd8e74b37469b41c1e61250d81c5776b42264f416d5d27c4626383ed", "0x5f3d4d03e");
       return true;
     }
-    // Midas mainnet: Genesis block checkpoint (height 0)
-    // NOTE: All Monero checkpoints have been removed as Midas has its own blockchain history
-    // Genesis block generated with GENESIS_NONCE=20000
-    // Updated checkpoint hash for new burn address with public view key
+    // Midas mainnet — checkpoints from canonical synced node (get_block_header_by_height RPC)
     ADD_CHECKPOINT2(0,     "52a8a5cf2e5e2d5eba995a67f0ed2c34e78c8fe765b6ea89778525216e946e09", "0x1");
+    ADD_CHECKPOINT2(10,    "4de1ba3c32fe9a4187e0d95af405233c0b07badaa1e243033b461f30f0d97c35", "0x4682f");
+    ADD_CHECKPOINT2(25,    "78ae57787bac87355f793be0865cfc09c5717d8863cc15cdc2b38d015473708f", "0x5694d");
+    ADD_CHECKPOINT2(50,    "1b22b48b4b8838f4621820ca0f15936577549d83db9b5cf983791f332c3a4001", "0x6d0c9");
+    ADD_CHECKPOINT2(100,   "0b60c9ed2b9eeb5dc13452ff9749c7c7eb7fbe8b44962b32f9e504daf2360cf1", "0x94681");
+    ADD_CHECKPOINT2(250,   "b17a36567a26f3baae2b12bebe31e7034994ddad9b21d5ed81fbbd7071d27939", "0xf71ee");
+    ADD_CHECKPOINT2(500,   "c4ec72edc481dcc969dbc63c99181c3f27eefd804074c13633807077df8ed854", "0x189749");
+    ADD_CHECKPOINT2(750,   "5b1ac95a55c266e18aa910f75c3b6d85b2a9cafb3f8e497e41993e8aa910189d", "0x2110c4");
+    ADD_CHECKPOINT2(1000,  "4c918b7d0fea52c5722e784b97e2180fcef0f6c656a406558862130ea593bd73", "0x292514");
+    ADD_CHECKPOINT2(5000,  "54b29f88668084cd973067ad5bcd015730de3a72e83798b262c5d9b73c4cd313", "0xae5061");
+    ADD_CHECKPOINT2(10000, "bbcb5d8fb1adf4e8bd32a7311f537a6d9f5cb820d58ca2bc31748d346fdd5efb", "0x1511b2d");
+    ADD_CHECKPOINT2(15000, "8b08f068cde6bea11bc5c10a586411a09c9a1b1c9a002e59ad3fb320e9ad690b", "0x1f2941d");
+    ADD_CHECKPOINT2(20000, "c5dde449cecad1391c73fa1b5145abe106d41f212e4f877f6b6bf906b12f3530", "0x2947e69");
+    ADD_CHECKPOINT2(25000, "a6bfff7a3b381320c45c895352a424f8d2cc2538398c097b706317e3ccc45122", "0x33a34d1");
+    ADD_CHECKPOINT2(30000, "37793e540f40abd7fa9c74970e7dde20e21d35c23cd1f8b3f68c09263e6618ef", "0x3df9190");
+    ADD_CHECKPOINT2(35000, "45686b0411b1c815ab9f0a97b4523d642326d2e6455517fffaf6db6fdd78529c", "0x4865207");
+    ADD_CHECKPOINT2(40000, "1d84ffa86ebad862f536b24fa777195f42cc21915d8f07f28886caba6d61d326", "0x520274e");
+    ADD_CHECKPOINT2(45000, "c7ded2354e665bdde176ed6de2cd34c25f6f88ed57244a60d66c271ffaa807ec", "0x5bbf6e1");
+    ADD_CHECKPOINT2(50000, "678a32f03034be01c17b4a8c2db5f64f52dcf2f7652ae2e8ae2c1f22b8c7d7a9", "0x65f259c");
+    ADD_CHECKPOINT2(55520, "31f8751d32e47df90a042078cb0eeb8f43cd9c125664c7b6d0f7c5f7348de8b2", "0x74b86a3");
     return true;
   }
 
